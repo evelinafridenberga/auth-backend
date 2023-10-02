@@ -11,8 +11,13 @@ const cors = require("cors");
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cors());
-
+app.use(
+  cors({
+    origin: "https://auth-frontend-sigma.vercel.app", // Replace with your frontend URL
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    credentials: true, // Allow cookies, if your app uses them
+  })
+);
 app.get("/", (request, response, next) => {
   response.json({ message: "Everything ok!" });
   next();
