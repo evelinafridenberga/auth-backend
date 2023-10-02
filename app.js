@@ -51,7 +51,7 @@ app.post("/register", (request, response) => {
 
       user.tokens.push({ token });
 
-      // return user.save();
+      user.save();
     })
     .then((result) => {
       response.status(201).send({
