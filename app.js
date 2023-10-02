@@ -29,6 +29,7 @@ app.post("/register", (request, response) => {
       const user = new User({
         email: request.body.email,
         password: hashedPassword,
+        tokens: [], // Initialize tokens array
       });
 
       // Generate and save the JWT token
@@ -75,24 +76,43 @@ app.post("/login", (request, response) => {
             });
           }
 
-          const token = jwt.sign(
-            {
-              userId: user._id,
-              userEmail: user.email,
-            },
-            "RANDOM-TOKEN",
-            { expiresIn: "24h" }
-          );
+          // Check if the user already has a token with a future expiration date
+          const currentToken = user.tokens.find((tokenInfo) => {
+            const decodedToken = jwt.decode(tokenInfo.token, {
+              complete: true,
+            });
+            return decodedToken.payload.exp > Date.now() / 1000;
+          });
 
-          // Save the token to the user's document
-          user.tokens.push({ token });
-          user.save().then(() => {
+          if (currentToken) {
+            // If a valid token exists, use it
+            const token = currentToken.token;
             response.status(200).send({
               message: "Login Successful",
               email: user.email,
               token,
             });
-          });
+          } else {
+            // If no valid token exists, generate a new one
+            const token = jwt.sign(
+              {
+                userId: user._id,
+                userEmail: user.email,
+              },
+              "RANDOM-TOKEN",
+              { expiresIn: "24h" }
+            );
+
+            // Save the token to the user's document
+            user.tokens.push({ token });
+            user.save().then(() => {
+              response.status(200).send({
+                message: "Login Successful",
+                email: user.email,
+                token,
+              });
+            });
+          }
         })
 
         .catch((error) => {
@@ -114,9 +134,5 @@ app.post("/login", (request, response) => {
 app.get("/free-endpoint", (request, response) => {
   response.json({ message: "You are free to access me anytime" });
 });
-
-// app.get("/auth-endpoint", (request, response) => {
-//   response.json({ message: "You are authorized to access me" });
-// });
 
 module.exports = app;
