@@ -7,9 +7,11 @@ const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const auth = require("./auth");
+const cors = require("cors");
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cors());
 
 app.get("/", (request, response, next) => {
   response.json({ message: "Everything ok!" });
@@ -28,6 +30,18 @@ app.post("/register", (request, response) => {
         email: request.body.email,
         password: hashedPassword,
       });
+
+      // Generate and save the JWT token
+      const token = jwt.sign(
+        {
+          userId: user._id,
+          userEmail: user.email,
+        },
+        "RANDOM-TOKEN",
+        { expiresIn: "24h" }
+      );
+
+      user.tokens.push({ token });
 
       return user.save();
     })
@@ -56,7 +70,7 @@ app.post("/login", (request, response) => {
         .then((passwordCheck) => {
           if (!passwordCheck) {
             return response.status(400).send({
-              message: "Passwords does not match",
+              message: "Passwords do not match",
               error,
             });
           }
@@ -70,16 +84,20 @@ app.post("/login", (request, response) => {
             { expiresIn: "24h" }
           );
 
-          response.status(200).send({
-            message: "Login Successful",
-            email: user.email,
-            token,
+          // Save the token to the user's document
+          user.tokens.push({ token });
+          user.save().then(() => {
+            response.status(200).send({
+              message: "Login Successful",
+              email: user.email,
+              token,
+            });
           });
         })
 
         .catch((error) => {
           response.status(400).send({
-            message: "Passwords does not match",
+            message: "Passwords do not match",
             error,
           });
         });

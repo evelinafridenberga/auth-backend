@@ -3,14 +3,20 @@ const UserSchema = new mongoose.Schema({
   email: {
     type: String,
     required: [true, "Please enter your email!"],
-    unique: [true, "Email already exist"],
+    unique: [true, "Email already exists"],
   },
-
   password: {
     type: String,
     required: [true, "Please enter your password!"],
-    unique: false,
   },
+  tokens: [
+    {
+      token: {
+        type: String,
+        required: true,
+      },
+    },
+  ],
 });
 
-module.exports = mongoose.model.Users || mongoose.model("Users", UserSchema);
+module.exports = mongoose.model("User", UserSchema);
