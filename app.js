@@ -30,38 +30,55 @@ app.get("/auth-endpoint", auth, (request, response) => {
 });
 
 app.post("/register", (request, response) => {
-  bcrypt
-    .hash(request.body.password, 10)
-    .then((hashedPassword) => {
-      const user = new User({
-        email: request.body.email,
-        password: hashedPassword,
-        tokens: [], // Initialize tokens array
-      });
+  // Check if the email already exists in the database
+  User.findOne({ email: request.body.email })
+    .then((existingUser) => {
+      if (existingUser) {
+        // Email already exists, return an error response
+        return response.status(400).send({
+          message: "Email already exists",
+        });
+      }
 
-      // Generate and save the JWT token
-      const token = jwt.sign(
-        {
-          userId: user._id,
-          userEmail: user.email,
-        },
-        "RANDOM-TOKEN",
-        { expiresIn: "24h" }
-      );
+      // Email is unique, proceed with registration
+      bcrypt
+        .hash(request.body.password, 10)
+        .then((hashedPassword) => {
+          const user = new User({
+            email: request.body.email,
+            password: hashedPassword,
+            tokens: [], // Initialize tokens array
+          });
 
-      user.tokens.push({ token });
+          // Generate and save the JWT token
+          const token = jwt.sign(
+            {
+              userId: user._id,
+              userEmail: user.email,
+            },
+            "RANDOM-TOKEN",
+            { expiresIn: "24h" }
+          );
 
-      user.save();
-    })
-    .then((result) => {
-      response.status(201).send({
-        message: "User Created Successfully",
-        result,
-      });
+          user.tokens.push({ token });
+
+          user.save().then((result) => {
+            response.status(201).send({
+              message: "User Created Successfully",
+              result,
+            });
+          });
+        })
+        .catch((error) => {
+          response.status(500).send({
+            message: "Error creating user",
+            error,
+          });
+        });
     })
     .catch((error) => {
       response.status(500).send({
-        message: "Error creating user",
+        message: "Error checking email uniqueness",
         error,
       });
     });
@@ -139,7 +156,7 @@ app.post("/login", (request, response) => {
 });
 
 app.get("/free-endpoint", (request, response) => {
-  response.json({ message: "You are free to access me anytime" });
+  response.json({ message: "You are free to access me anytimeee" });
 });
 
 module.exports = app;
