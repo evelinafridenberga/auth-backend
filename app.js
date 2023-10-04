@@ -156,7 +156,7 @@ app.post("/login", (request, response) => {
 });
 
 app.get("/free-endpoint", (request, response) => {
-  response.json({ message: "You are free to access me anytimeee" });
+  response.json({ message: "You are free to access me anytime" });
 });
 
 module.exports = app;
