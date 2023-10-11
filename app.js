@@ -2,6 +2,7 @@ const dbConnect = require("./db/dbConnect");
 dbConnect();
 const User = require("./db/userModel");
 const express = require("express");
+const cookieParser = require("cookie-parser");
 const app = express();
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
@@ -14,6 +15,16 @@ app.use(function (req, res, next) {
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Credentials", true);
+  next();
+});
+
+app.use(cookieParser());
+app.use((req, res, next) => {
+  res.cookie("yourCookieName", "cookieValue", {
+    maxAge: 86400000,
+    secure: false,
+    httpOnly: true,
+  });
   next();
 });
 
@@ -47,7 +58,7 @@ app.post("/register", (request, response) => {
           const user = new User({
             email: request.body.email,
             password: hashedPassword,
-            tokens: [], // Initialize tokens array
+            tokens: [],
           });
 
           // Generate and save the JWT token
@@ -63,6 +74,12 @@ app.post("/register", (request, response) => {
           user.tokens.push({ token });
 
           user.save().then((result) => {
+            // Set a cookie upon successful registration
+            response.cookie("userToken", token, {
+              maxAge: 86400000, // Cookie expiration time in milliseconds (24 hours)
+              httpOnly: true, // Make the cookie accessible only via HTTP(S)
+            });
+
             response.status(201).send({
               message: "User Created Successfully",
               result,
@@ -86,73 +103,76 @@ app.post("/register", (request, response) => {
 
 app.post("/login", (request, response) => {
   // check if email exists
-  User.findOne({ email: request.body.email })
+  User.findOne({ email: request.body.email }).then((user) => {
+    if (!user) {
+      // Email not found, return an error response
+      return response.status(400).send({
+        message: "Email not found",
+      });
+    }
 
-    .then((user) => {
-      bcrypt
-        .compare(request.body.password, user.password)
-
-        .then((passwordCheck) => {
-          if (!passwordCheck) {
-            return response.status(400).send({
-              message: "Passwords do not match",
-              error,
-            });
-          }
-
-          // Check if the user already has a token with a future expiration date
-          const currentToken = user.tokens.find((tokenInfo) => {
-            const decodedToken = jwt.decode(tokenInfo.token, {
-              complete: true,
-            });
-            return decodedToken.payload.exp > Date.now() / 1000;
+    bcrypt
+      .compare(request.body.password, user.password)
+      .then((passwordCheck) => {
+        if (!passwordCheck) {
+          return response.status(400).send({
+            message: "Passwords do not match",
           });
+        }
 
-          if (currentToken) {
-            // If a valid token exists, use it
-            const token = currentToken.token;
+        const currentToken = user.tokens.find((tokenInfo) => {
+          const decodedToken = jwt.decode(tokenInfo.token, {
+            complete: true,
+          });
+          return decodedToken.payload.exp > Date.now() / 1000;
+        });
+
+        if (currentToken) {
+          const token = currentToken.token;
+          response.cookie("authToken", token, {
+            maxAge: 86400000, // 1 day in milliseconds
+          });
+          response.status(200).send({
+            message: "Login Successful",
+            email: user.email,
+            token,
+          });
+          console.log("Existing token branch");
+        } else {
+          console.log("New token branch");
+          const token = jwt.sign(
+            {
+              userId: user._id,
+              userEmail: user.email,
+            },
+            "SECRET_KEY",
+            { expiresIn: "24h" }
+          );
+
+          user.tokens.push({ token });
+          user.save().then(() => {
+            // Set the new token in the cookie
+            console.log("Token saved and cookie set");
+            response.cookie("authToken", token, {
+              maxAge: 86400000, // 1 day in milliseconds
+              httpOnly: true,
+              secure: false, // Change to true for HTTPS
+              domain: "localhost", // Set the domain to "localhost"
+            });
             response.status(200).send({
               message: "Login Successful",
               email: user.email,
               token,
             });
-          } else {
-            // If no valid token exists, generate a new one
-            const token = jwt.sign(
-              {
-                userId: user._id,
-                userEmail: user.email,
-              },
-              "RANDOM-TOKEN",
-              { expiresIn: "24h" }
-            );
-
-            // Save the token to the user's document
-            user.tokens.push({ token });
-            user.save().then(() => {
-              response.status(200).send({
-                message: "Login Successful",
-                email: user.email,
-                token,
-              });
-            });
-          }
-        })
-
-        .catch((error) => {
-          response.status(400).send({
-            message: "Passwords do not match",
-            error,
           });
+        }
+      })
+      .catch((error) => {
+        response.status(400).send({
+          message: "Passwords do not match",
         });
-    })
-
-    .catch((e) => {
-      response.status(404).send({
-        message: "Email not found",
-        e,
       });
-    });
+  });
 });
 
 app.get("/free-endpoint", (request, response) => {
